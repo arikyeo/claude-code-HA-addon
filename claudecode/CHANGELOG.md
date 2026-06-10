@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.2] - 2026-06-10
+
+### Fixed
+- Enable tmux mouse mode (`set -g mouse on`) so the scroll wheel / touch-drag
+  scrolls the Claude Code TUI. With mouse off, the terminal translated the wheel
+  into arrow keys (Claude showed "Scroll wheel is sending arrow keys · use
+  PgUp/PgDn"), unusable on laptops/phones without PgUp/PgDn. To copy text, hold
+  Shift while selecting, since Claude captures the mouse for its own scrolling.
+
 ## [1.3.1] - 2026-06-10
 
 ### Fixed
