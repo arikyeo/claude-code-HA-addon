@@ -99,17 +99,18 @@ RUN mkdir -p \
     /root/.config \
     /root/.local/bin
 
-# Configure tmux: large scrollback + touch/mobile-friendly defaults.
-# Mouse capture is OFF so native browser scrolling, long-press selection and
-# copy/paste work on phones/tablets; the status bar is hidden to save space.
+# Configure tmux: large scrollback, clean TUI rendering, wheel/touch scrolling.
 RUN cat > /root/.tmux.conf << 'EOF'
 set -g history-limit 50000
 # Keep the alternate screen ENABLED so full-screen apps (the Claude Code TUI,
 # vim, less) repaint cleanly. Do NOT add an smcup@/rmcup@ override here: it dumps
 # every TUI redraw into the scrollback, which shows up as duplicated/garbled lines.
-# Mouse OFF: let the browser/touchscreen handle scrolling and copy/paste; the
-# Claude TUI still receives wheel events directly, so its own scrolling works.
-set -g mouse off
+# Mouse ON so the scroll wheel / touch-drag actually scrolls: tmux forwards wheel
+# events to the Claude Code TUI (a full-screen mouse app) instead of letting the
+# terminal turn them into arrow keys. At the shell, the wheel scrolls tmux's
+# scrollback (press q to exit). To copy text, hold Shift while selecting, since
+# Claude grabs the mouse for its own scrolling.
+set -g mouse on
 # Snappy ESC handling for the Claude Code TUI (avoids arrow/ESC lag)
 set -sg escape-time 10
 # Hide the status bar to save screen space on small/mobile displays
