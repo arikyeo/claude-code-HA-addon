@@ -61,6 +61,14 @@ configuration:
     description: >-
       Opciones de línea de comandos adicionales añadidas al comando de inicio de Claude,
       por ejemplo "--model opus". Déjalo vacío para ninguna.
+  enable_chat_ui:
+    name: Habilitar Interfaz de Chat CloudCLI
+    description: >-
+      Ejecuta también CloudCLI, una interfaz de chat web para Claude Code apta para
+      móviles, en el puerto 3001 (abre http://TU-IP-HA:3001). Reutiliza tu sesión de
+      Claude y el acceso a HA, y tiene su propio inicio de sesión. Desactivado por
+      defecto; el terminal no se ve afectado. Requiere Node 22+.
 
 network:
   7681/tcp: Terminal Web (ttyd)
+  3001/tcp: Interfaz de Chat CloudCLI (cuando enable_chat_ui está activo)
