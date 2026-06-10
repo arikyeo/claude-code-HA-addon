@@ -54,8 +54,9 @@ RUN case "${BUILD_ARCH}" in \
     curl -fsSL "https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.${TTYD_ARCH}" -o /usr/bin/ttyd && \
     chmod +x /usr/bin/ttyd
 
-# Install Claude Code via npm
-RUN npm install -g @anthropic-ai/claude-code
+# Claude Code is intentionally NOT baked into the image. It is installed at
+# runtime into persistent storage (/homeassistant/.claudecode/npm-global) so its
+# version is decoupled from the add-on and can always be updated to the latest.
 
 # Install hass-mcp for Home Assistant integration and pymodbus for Modbus operations
 RUN pip3 install --no-cache-dir --break-system-packages hass-mcp pymodbus pyserial
@@ -97,22 +98,32 @@ RUN mkdir -p \
     /root/.config \
     /root/.local/bin
 
-# Configure tmux with large scrollback buffer and scroll support
+# Configure tmux: large scrollback + touch/mobile-friendly defaults.
+# Mouse capture is OFF so native browser scrolling, long-press selection and
+# copy/paste work on phones/tablets; the status bar is hidden to save space.
 RUN cat > /root/.tmux.conf << 'EOF'
-set -g history-limit 20000
-# Disable alternate screen buffer to allow terminal scrollback
+set -g history-limit 50000
+# Disable alternate screen buffer so the terminal's own scrollback works
 set -ga terminal-overrides ',xterm*:smcup@:rmcup@'
-# Enable mouse support for scrolling (but may affect copy/paste)
-set -g mouse on
-# Bind mouse wheel to scroll through history in copy mode
-bind -n WheelUpPane if-shell -F -t = "#{mouse_any_flag}" "send-keys -M" "if -Ft= '#{pane_in_mode}' 'send-keys -M' 'select-pane -t=; copy-mode -e; send-keys -M'"
-bind -n WheelDownPane select-pane -t= \; send-keys -M
+# Mouse OFF: let the browser/touchscreen handle scrolling and copy/paste
+set -g mouse off
+# Snappy ESC handling for the Claude Code TUI (avoids arrow/ESC lag)
+set -sg escape-time 10
+# Hide the status bar to save screen space on small/mobile displays
+set -g status off
 EOF
 
-# Configure bash with aliases and prompt
+# Configure bash with aliases, prompt, and the persistent Claude Code on PATH
 RUN cat > /root/.bashrc << 'EOF'
 export TERM=xterm-256color
 export LANG=C.UTF-8
+
+# Claude Code lives in persistent storage (decoupled from the add-on image so it
+# always runs the latest version). Keep it on PATH and make npm -g install/update
+# land in the same persistent prefix.
+export NPM_CONFIG_PREFIX=/homeassistant/.claudecode/npm-global
+export PATH="/homeassistant/.claudecode/npm-global/bin:/root/.local/bin:$PATH"
+
 PS1='\[\033[1;36m\]claude-code\[\033[0m\]:\[\033[1;34m\]\w\[\033[0m\]\$ '
 
 # Function to update MCP token before starting Claude
@@ -127,6 +138,8 @@ update_mcp_token() {
 alias ll='ls -la'
 alias c='update_mcp_token && claude'
 alias cc='update_mcp_token && claude --continue'
+alias claude-yolo='update_mcp_token && IS_SANDBOX=1 claude --dangerously-skip-permissions'
+alias claude-update='npm install -g @anthropic-ai/claude-code@latest && hash -r && claude --version'
 alias ha-config='cd /homeassistant'
 alias ha-logs='cat /homeassistant/home-assistant.log 2>/dev/null || echo "Log not found"'
 EOF
@@ -134,8 +147,66 @@ EOF
 # Ensure .bashrc is sourced for login shells too
 RUN echo 'source ~/.bashrc' > /root/.profile
 
-# Set up PATH
-ENV PATH="/root/.local/bin:${PATH}"
+# Point npm's global prefix at persistent storage so Claude Code (and any other
+# global npm package) survives add-on rebuilds and is updatable to the latest
+# version at any time. This is what decouples the Claude Code version from the
+# add-on image. Created after all build-time npm/npx usage so the build is
+# unaffected (the prefix dir only exists at runtime).
+RUN printf 'prefix=/homeassistant/.claudecode/npm-global\n' > /root/.npmrc
+
+# Auto-launch wrapper: starts Claude Code automatically inside the persistent
+# session and drops to a shell when Claude exits, so the session stays usable.
+RUN cat > /usr/local/bin/claude-launch << 'EOF'
+#!/bin/bash
+export TERM=xterm-256color
+export LANG=C.UTF-8
+export NPM_CONFIG_PREFIX=/homeassistant/.claudecode/npm-global
+export PATH="/homeassistant/.claudecode/npm-global/bin:/root/.local/bin:$PATH"
+
+OPTIONS=/data/options.json
+SKIP_PERMS=$(jq -r '.claude_skip_permissions // true' "$OPTIONS" 2>/dev/null)
+EXTRA_ARGS=$(jq -r '.claude_extra_args // ""' "$OPTIONS" 2>/dev/null)
+WORKDIR=$(jq -r '.working_directory // "/homeassistant"' "$OPTIONS" 2>/dev/null)
+
+# Keep the Home Assistant Supervisor token fresh for the hass-mcp server
+if [ -f /root/.claude/settings.json ] && [ -n "$SUPERVISOR_TOKEN" ]; then
+  jq ".mcpServers.homeassistant.env.HASS_TOKEN = \"$SUPERVISOR_TOKEN\"" /root/.claude/settings.json > /tmp/settings.tmp 2>/dev/null && mv /tmp/settings.tmp /root/.claude/settings.json
+fi
+
+# Make sure Claude Code is installed (first boot / fresh persistent storage)
+if ! command -v claude >/dev/null 2>&1; then
+  echo '[claude-launch] Claude Code not found - installing the latest version...'
+  npm install -g @anthropic-ai/claude-code@latest && hash -r
+fi
+
+cd "${WORKDIR:-/homeassistant}" 2>/dev/null || cd /homeassistant
+
+ARGS=""
+if [ "$SKIP_PERMS" = "true" ]; then
+  export IS_SANDBOX=1
+  ARGS="--dangerously-skip-permissions"
+fi
+if [ -n "$EXTRA_ARGS" ] && [ "$EXTRA_ARGS" != "null" ]; then
+  ARGS="$ARGS $EXTRA_ARGS"
+fi
+
+echo "[claude-launch] Launching: claude $ARGS"
+echo "[claude-launch] Exit Claude to drop to a shell. This session persists across browser reconnects."
+echo
+claude $ARGS
+
+# When Claude exits, hand over to an interactive login shell so the tmux pane
+# (and thus the persistent session) stays alive and usable.
+echo
+echo "[claude-launch] Claude exited - you are now in a shell. Run 'claude-launch' to relaunch Claude."
+exec bash --login
+EOF
+RUN chmod +x /usr/local/bin/claude-launch
+
+# Set up PATH (persistent npm prefix first so the user-updatable Claude wins)
+# and make npm's global prefix persistent for every context (CMD + shells).
+ENV PATH="/homeassistant/.claudecode/npm-global/bin:/root/.local/bin:${PATH}" \
+    NPM_CONFIG_PREFIX="/homeassistant/.claudecode/npm-global"
 
 # Set working directory
 WORKDIR /homeassistant
@@ -230,13 +301,20 @@ CMD ["/bin/bash", "-c", "\
     fi; \
   fi && \
   AUTO_UPDATE=$(jq -r '.auto_update_claude // true' /data/options.json) && \
-  if [ \"$AUTO_UPDATE\" = \"true\" ]; then \
-    echo '[INFO] Checking for Claude Code updates...' && \
-    npm update -g @anthropic-ai/claude-code 2>/dev/null || echo '[WARN] Update check failed, continuing...'; \
+  mkdir -p /homeassistant/.claudecode/npm-global && \
+  hash -r && \
+  if ! claude --version >/dev/null 2>&1; then \
+    echo '[INFO] Installing Claude Code (latest) into persistent storage...' && \
+    npm install -g @anthropic-ai/claude-code@latest || echo '[WARN] Claude Code install failed - check network, then run claude-update in the terminal'; \
+  elif [ \"$AUTO_UPDATE\" = \"true\" ]; then \
+    echo '[INFO] Updating Claude Code to the latest version...' && \
+    npm install -g @anthropic-ai/claude-code@latest >/dev/null 2>&1 || echo '[WARN] Update failed - using the installed version'; \
   fi && \
+  hash -r && \
+  echo \"[INFO] Claude Code version: $(claude --version 2>/dev/null || echo 'not installed')\" && \
   claude mcp remove homeassistant -s user 2>/dev/null || true && \
   claude mcp remove playwright -s user 2>/dev/null || true && \
-  if [ \"$ENABLE_MCP\" = \"true\" ]; then \
+  if [ \"$ENABLE_MCP\" = \"true\" ] && command -v claude >/dev/null 2>&1; then \
     claude mcp add-json homeassistant '{\"command\":\"hass-mcp\"}' -s user && \
     SETTINGS_FILE=/root/.claude/settings.json && \
     ALLOWED_TOOLS='[\"mcp__homeassistant__get_version\",\"mcp__homeassistant__get_entity\",\"mcp__homeassistant__list_entities\",\"mcp__homeassistant__search_entities_tool\",\"mcp__homeassistant__domain_summary_tool\",\"mcp__homeassistant__list_automations\",\"mcp__homeassistant__get_history\",\"mcp__homeassistant__get_error_log\",\"Read(/homeassistant/**)\",\"Read(/config/**)\",\"Read(/share/**)\",\"Read(/media/**)\",\"Glob(/homeassistant/**)\",\"Glob(/config/**)\",\"Grep(/homeassistant/**)\",\"Grep(/config/**)\"]' && \
@@ -246,7 +324,7 @@ CMD ["/bin/bash", "-c", "\
   else \
     echo '[INFO] MCP disabled'; \
   fi && \
-  if [ \"$ENABLE_PLAYWRIGHT\" = \"true\" ]; then \
+  if [ \"$ENABLE_PLAYWRIGHT\" = \"true\" ] && command -v claude >/dev/null 2>&1; then \
     claude mcp add-json playwright \"{\\\"command\\\":\\\"npx\\\",\\\"args\\\":[\\\"--no-install\\\",\\\"@playwright/mcp\\\",\\\"--cdp-endpoint\\\",\\\"http://${PLAYWRIGHT_HOST}:9222\\\"]}\" -s user && \
     echo \"[INFO] Playwright MCP enabled (CDP: http://${PLAYWRIGHT_HOST}:9222)\"; \
     echo '[INFO] Make sure the Playwright Browser add-on is installed and running'; \
@@ -258,10 +336,16 @@ CMD ["/bin/bash", "-c", "\
   else \
     COLORS='background=#eff1f5,foreground=#4c4f69,cursor=#dc8a78'; \
   fi && \
-  if [ \"$SESSION_PERSIST\" = \"true\" ]; then \
-    SHELL_CMD='tmux new-session -A -s claude'; \
+  AUTO_START=$(jq -r '.auto_start_claude // true' /data/options.json) && \
+  if [ \"$AUTO_START\" = \"true\" ]; then \
+    LAUNCH_CMD='/usr/local/bin/claude-launch'; \
   else \
-    SHELL_CMD='bash --login'; \
+    LAUNCH_CMD='bash --login'; \
+  fi && \
+  if [ \"$SESSION_PERSIST\" = \"true\" ]; then \
+    SHELL_CMD=\"tmux new-session -A -s claude $LAUNCH_CMD\"; \
+  else \
+    SHELL_CMD=\"$LAUNCH_CMD\"; \
   fi && \
   cd /homeassistant && \
   exec ttyd --port 7681 --writable --ping-interval 30 --max-clients 5 \

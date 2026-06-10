@@ -40,8 +40,25 @@ configuration:
   auto_update_claude:
     name: Auto-update Claude Code
     description: >-
-      Automatically check for and install Claude Code updates on add-on startup.
-      Keeps Claude Code current without requiring add-on version bumps.
+      Update Claude Code to the latest version on every add-on start. Claude Code
+      is installed in persistent storage (decoupled from the add-on image), so it
+      stays current without requiring add-on version bumps.
+  auto_start_claude:
+    name: Auto-start Claude Code
+    description: >-
+      Launch Claude Code automatically when the terminal opens, so there is nothing
+      to type after a reboot. Exit Claude to drop to a shell; the session persists.
+  claude_skip_permissions:
+    name: Skip Permission Prompts
+    description: >-
+      Start Claude with --dangerously-skip-permissions (and IS_SANDBOX=1) so it can
+      read/change files and call services without asking each time. Disable for a
+      safer prompt-before-acting flow. Use with care.
+  claude_extra_args:
+    name: Extra Claude Arguments
+    description: >-
+      Additional command-line flags appended to the auto-started Claude command,
+      e.g. "--model opus". Leave empty for none.
 
 network:
   7681/tcp: Web Terminal (ttyd)

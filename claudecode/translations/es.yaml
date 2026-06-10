@@ -42,8 +42,25 @@ configuration:
   auto_update_claude:
     name: Actualización Automática de Claude Code
     description: >-
-      Verifica e instala automáticamente actualizaciones de Claude Code al iniciar el add-on.
-      Mantiene Claude Code actualizado sin necesidad de actualizar la versión del add-on.
+      Actualiza Claude Code a la última versión en cada inicio del add-on. Claude Code
+      se instala en almacenamiento persistente (desacoplado de la imagen del add-on),
+      por lo que se mantiene actualizado sin necesidad de cambiar la versión del add-on.
+  auto_start_claude:
+    name: Iniciar Claude Code Automáticamente
+    description: >-
+      Inicia Claude Code automáticamente al abrir el terminal, así no hay que escribir
+      nada tras un reinicio. Sal de Claude para pasar a una shell; la sesión persiste.
+  claude_skip_permissions:
+    name: Omitir Confirmaciones de Permisos
+    description: >-
+      Inicia Claude con --dangerously-skip-permissions (e IS_SANDBOX=1) para que pueda
+      leer/modificar archivos y llamar servicios sin preguntar cada vez. Desactiva para
+      un flujo más seguro que pide confirmación. Úsalo con cuidado.
+  claude_extra_args:
+    name: Argumentos Adicionales de Claude
+    description: >-
+      Opciones de línea de comandos adicionales añadidas al comando de inicio de Claude,
+      por ejemplo "--model opus". Déjalo vacío para ninguna.
 
 network:
   7681/tcp: Terminal Web (ttyd)
