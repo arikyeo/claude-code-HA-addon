@@ -1,9 +1,9 @@
 name: CI
 
 # Lightweight checks for the add-ons:
-#   - lint:  validates each add-on's config.yaml/schema with the official HA linter
-#   - build: does an amd64 "test" build of the Claude Code image (no push) so any
-#            Dockerfile breakage is caught on every pull request.
+#   - lint:  validates each add-on's config.yaml/schema with the official HA linter (advisory)
+#   - build: amd64 "test" build of the Claude Code image via the official HA builder
+#            (no push) so Dockerfile breakage is caught on every pull request.
 on:
   push:
     branches: [main]
@@ -52,15 +52,20 @@ jobs:
       - name: Check out the repository
         uses: actions/checkout@v4
 
-      # Plain `docker build` of the add-on Dockerfile for amd64 (no push) — the
-      # gating check that catches Dockerfile / package / download breakage. We pass
-      # the same BUILD_FROM / BUILD_ARCH the HA Supervisor injects, instead of the HA
-      # builder action (which insists on a registry image name this locally-built
-      # add-on intentionally doesn't define).
-      - name: Build claudecode image
-        run: |
-          docker build \
-            --build-arg BUILD_FROM=ghcr.io/home-assistant/amd64-base-python:3.13-alpine3.21 \
-            --build-arg BUILD_ARCH=amd64 \
-            -t local/claudecode:ci \
-            ./claudecode
+      # Build the add-on the way Home Assistant does, via the official builder image.
+      # Its Dockerfile frontend parses the `RUN cat > file <<'EOF'` heredocs that a
+      # plain `docker build` rejects without a `# syntax=` directive (that's how this
+      # add-on already ships). --test builds without pushing. This add-on has no
+      # `image:` field and the builder forms "<docker-hub>/<image>:<version>", so an
+      # empty docker-hub produces an invalid "/...:" tag — we set --docker-hub and
+      # --image purely to give the local test build a valid name.
+      - name: Build claudecode image (test, no push)
+        uses: home-assistant/builder@master
+        with:
+          args: |
+            --test \
+            --amd64 \
+            --docker-hub local \
+            --image {arch}-claudecode \
+            --target claudecode \
+            --addon
