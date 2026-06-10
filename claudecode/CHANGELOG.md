@@ -41,6 +41,11 @@ All notable changes to this project will be documented in this file.
   risky — review the Security section of the README and disable
   `claude_skip_permissions` / narrow the access flags if that is not what you want.
 
+### Internal
+- Added GitHub Actions CI (`.github/workflows/ci.yaml`): runs the official Home
+  Assistant add-on linter on both add-ons and an amd64 test build of the Claude
+  Code image (no push) on every pull request.
+
 ## [1.2.63] - 2026-02-23
 
 ### Fixed

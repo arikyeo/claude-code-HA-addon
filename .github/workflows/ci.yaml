@@ -1,0 +1,63 @@
+name: CI
+
+# Lightweight checks for the add-ons:
+#   - lint:  validates each add-on's config.yaml/schema with the official HA linter
+#   - build: does an amd64 "test" build of the Claude Code image (no push) so any
+#            Dockerfile breakage is caught on every pull request.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Cancel superseded runs on the same ref to save CI minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint ${{ matrix.addon }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        addon:
+          - claudecode
+          - playwright-browser
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Home Assistant add-on linter
+        uses: frenck/action-addon-linter@v2
+        with:
+          path: "./${{ matrix.addon }}"
+
+  build:
+    name: Build ${{ matrix.addon }} (amd64)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        addon:
+          - claudecode
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      # Builds the image locally for amd64 without pushing. Uses the add-on's
+      # build.yaml (base image) + Dockerfile, so it fails if the Dockerfile,
+      # package installs, or downloads break.
+      - name: Build add-on image (test, no push)
+        uses: home-assistant/builder@master
+        with:
+          args: |
+            --test \
+            --amd64 \
+            --target ${{ matrix.addon }} \
+            --addon
