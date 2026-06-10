@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 ARG BUILD_FROM
 FROM ${BUILD_FROM}
 
@@ -103,9 +104,11 @@ RUN mkdir -p \
 # copy/paste work on phones/tablets; the status bar is hidden to save space.
 RUN cat > /root/.tmux.conf << 'EOF'
 set -g history-limit 50000
-# Disable alternate screen buffer so the terminal's own scrollback works
-set -ga terminal-overrides ',xterm*:smcup@:rmcup@'
-# Mouse OFF: let the browser/touchscreen handle scrolling and copy/paste
+# Keep the alternate screen ENABLED so full-screen apps (the Claude Code TUI,
+# vim, less) repaint cleanly. Do NOT add an smcup@/rmcup@ override here: it dumps
+# every TUI redraw into the scrollback, which shows up as duplicated/garbled lines.
+# Mouse OFF: let the browser/touchscreen handle scrolling and copy/paste; the
+# Claude TUI still receives wheel events directly, so its own scrolling works.
 set -g mouse off
 # Snappy ESC handling for the Claude Code TUI (avoids arrow/ESC lag)
 set -sg escape-time 10
