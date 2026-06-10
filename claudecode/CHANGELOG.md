@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.1] - 2026-06-10
+
+### Fixed
+- Add `# syntax=docker/dockerfile:1` directive so the Dockerfile's
+  `RUN cat <<'EOF'` heredocs (`.tmux.conf`, `.bashrc`, `claude-launch`) parse
+  correctly. Without it, current Docker/BuildKit builders — including the official
+  Home Assistant builder image — fail at build time with
+  `dockerfile parse error: unknown instruction: set`, which could break a fresh
+  build/install of the add-on.
+
+### Internal
+- CI build job builds via the official Home Assistant builder with a valid local
+  image name (`--docker-hub local --image {arch}-claudecode`).
+
 ## [1.3.0] - 2026-06-10
 
 ### Changed
