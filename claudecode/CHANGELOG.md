@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
   Home Assistant builder image — fail at build time with
   `dockerfile parse error: unknown instruction: set`, which could break a fresh
   build/install of the add-on.
+- Re-enable the tmux alternate screen (removed the `smcup@:rmcup@`
+  `terminal-overrides`). With it disabled, the auto-launched Claude Code TUI
+  repainted into the scrollback, producing duplicated/garbled lines and broken
+  scroll-up. Full-screen apps now repaint cleanly.
 
 ### Internal
 - CI build job builds via the official Home Assistant builder with a valid local
