@@ -46,30 +46,21 @@ jobs:
           path: "./${{ matrix.addon }}"
 
   build:
-    name: Build ${{ matrix.addon }} (amd64)
+    name: Build claudecode image (amd64)
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        addon:
-          - claudecode
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
 
-      # Builds the image locally for amd64 without pushing. Uses the add-on's
-      # build.yaml (base image) + Dockerfile, so it fails if the Dockerfile,
-      # package installs, or downloads break.
-      - name: Build add-on image (test, no push)
-        uses: home-assistant/builder@master
-        with:
-          # --image gives the test build a valid tag. This add-on has no `image:`
-          # field (it builds locally on each HA, it isn't published to a registry),
-          # so without this the builder produces an invalid empty tag "/:<version>".
-          # {arch} is substituted by the builder; nothing is pushed in --test mode.
-          args: |
-            --test \
-            --amd64 \
-            --image local/{arch}-${{ matrix.addon }} \
-            --target ${{ matrix.addon }} \
-            --addon
+      # Plain `docker build` of the add-on Dockerfile for amd64 (no push) — the
+      # gating check that catches Dockerfile / package / download breakage. We pass
+      # the same BUILD_FROM / BUILD_ARCH the HA Supervisor injects, instead of the HA
+      # builder action (which insists on a registry image name this locally-built
+      # add-on intentionally doesn't define).
+      - name: Build claudecode image
+        run: |
+          docker build \
+            --build-arg BUILD_FROM=ghcr.io/home-assistant/amd64-base-python:3.13-alpine3.21 \
+            --build-arg BUILD_ARCH=amd64 \
+            -t local/claudecode:ci \
+            ./claudecode
