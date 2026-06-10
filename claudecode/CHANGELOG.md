@@ -2,6 +2,45 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0] - 2026-06-10
+
+### Changed
+- **Decoupled Claude Code from the add-on image.** Claude Code is no longer baked
+  in at build time. It is installed into persistent storage
+  (`/homeassistant/.claudecode/npm-global`) on first boot and refreshed to the
+  latest version on every start (when `auto_update_claude` is on). You can always
+  run the newest Claude Code and update it from the terminal at any time with the
+  new `claude-update` alias — no add-on version bump required.
+- **Mobile-friendly terminal.** tmux mouse capture is now OFF so native browser
+  scrolling, long-press selection and copy/paste work on phones/tablets. The tmux
+  status bar is hidden, ESC handling is snappier for the Claude TUI, and scrollback
+  was raised to 50,000 lines. tmux is still used for session persistence — it is
+  required to keep Claude running in the background across browser reconnects — but
+  it now stays invisible behind the auto-launched Claude session. Set
+  `session_persistence: false` for a plain terminal (loses background persistence).
+
+### Added
+- **Auto-start Claude on boot** via `auto_start_claude` (default: `true`). The
+  terminal launches Claude automatically inside the persistent session and drops to
+  a shell if you exit Claude, so there is nothing to type after a reboot.
+- **`claude_skip_permissions`** option (default: `true`) — auto-runs
+  `claude --dangerously-skip-permissions` with `IS_SANDBOX=1` so Claude can act
+  without per-action confirmation. Set to `false` for prompt-before-acting.
+- **`claude_extra_args`** option — append arbitrary flags to the auto-started
+  Claude command (e.g. `--model opus`).
+- `claude-update` and `claude-yolo` shell aliases (manual update / bypass-perms launch).
+- **Maximum system access** for full root control: `privileged` Linux capabilities,
+  `host_pid`, `host_dbus`, and AppArmor disabled (`apparmor: false`). Directory
+  mapping broadened — `ssl` and `backup` are now read-write, plus new `addons` and
+  `all_addon_configs` maps.
+
+### Security
+- This release intentionally runs the add-on with full, unconfined root access to
+  the host (privileged + AppArmor off + host PID/DBus + Docker socket) and, by
+  default, launches Claude with permission checks bypassed. This is powerful and
+  risky — review the Security section of the README and disable
+  `claude_skip_permissions` / narrow the access flags if that is not what you want.
+
 ## [1.2.63] - 2026-02-23
 
 ### Fixed
