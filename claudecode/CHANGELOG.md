@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.0] - 2026-06-10
+
+### Added
+- **Optional CloudCLI chat web UI** (`enable_chat_ui`, default `false`) — a
+  mobile-friendly chat interface for Claude Code as an alternative to the terminal
+  TUI (no tmux, native scrolling). When enabled, the add-on installs CloudCLI
+  (`@cloudcli-ai/cloudcli`) into persistent storage and serves it on port **3001**.
+  It reuses your existing Claude login, Home Assistant file access and MCP servers
+  (all read from `~/.claude`); its own data/login persists in
+  `/homeassistant/.claudecode/cloudcli`.
+  - Open it directly at `http://<your-ha-ip>:3001` — it has its own login.
+  - CloudCLI's frontend uses absolute paths, so it can't run behind HA ingress (the
+    sidebar). See the README for an optional `panel_iframe` sidebar shortcut.
+  - Requires Node 22+ (otherwise skipped with a warning). The terminal is
+    completely unaffected when the chat UI is off.
+
 ## [1.3.2] - 2026-06-10
 
 ### Fixed

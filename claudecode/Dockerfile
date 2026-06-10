@@ -288,6 +288,7 @@ CMD ["/bin/bash", "-c", "\
   if [ ! -L /root/.claude ]; then rm -rf /root/.claude; ln -s $PERSIST_DIR /root/.claude; fi && \
   if [ ! -L /root/.config/claude-code ]; then rm -rf /root/.config/claude-code; ln -s $PERSIST_DIR/config /root/.config/claude-code; fi && \
   if [ ! -L /root/.claude.json ]; then touch $PERSIST_DIR/.claude.json; rm -f /root/.claude.json; ln -s $PERSIST_DIR/.claude.json /root/.claude.json; fi && \
+  if [ ! -L /root/.cloudcli ]; then rm -rf /root/.cloudcli; mkdir -p $PERSIST_DIR/cloudcli; ln -s $PERSIST_DIR/cloudcli /root/.cloudcli; fi && \
   FONT_SIZE=$(jq -r '.terminal_font_size // 14' /data/options.json) && \
   THEME=$(jq -r '.terminal_theme // \"dark\"' /data/options.json) && \
   SESSION_PERSIST=$(jq -r '.session_persistence // true' /data/options.json) && \
@@ -350,6 +351,27 @@ CMD ["/bin/bash", "-c", "\
     SHELL_CMD=\"tmux new-session -A -s claude $LAUNCH_CMD\"; \
   else \
     SHELL_CMD=\"$LAUNCH_CMD\"; \
+  fi && \
+  ENABLE_CHAT_UI=$(jq -r '.enable_chat_ui // false' /data/options.json) && \
+  if [ \"$ENABLE_CHAT_UI\" = \"true\" ]; then \
+    NODE_MAJOR=$(node -v 2>/dev/null | cut -d. -f1 | tr -d v) && \
+    if [ \"${NODE_MAJOR:-0}\" -ge 22 ]; then \
+      if ! command -v cloudcli >/dev/null 2>&1; then \
+        echo '[INFO] Installing CloudCLI chat UI into persistent storage (first run, may take a minute)...'; \
+        npm install -g @cloudcli-ai/cloudcli@latest || echo '[WARN] CloudCLI install failed - check network'; \
+        hash -r; \
+      elif [ \"$AUTO_UPDATE\" = \"true\" ]; then \
+        npm install -g @cloudcli-ai/cloudcli@latest >/dev/null 2>&1 || true; hash -r; \
+      fi; \
+      if command -v cloudcli >/dev/null 2>&1; then \
+        echo '[INFO] Starting CloudCLI chat UI on port 3001 - open http://<your-ha-ip>:3001'; \
+        ( cd /homeassistant && SERVER_PORT=3001 HOST=0.0.0.0 cloudcli >$PERSIST_DIR/cloudcli/cloudcli.log 2>&1 & ); \
+      else \
+        echo '[WARN] CloudCLI not installed; chat UI skipped (the terminal still works)'; \
+      fi; \
+    else \
+      echo \"[WARN] CloudCLI needs Node 22+, found Node ${NODE_MAJOR:-unknown}; skipping chat UI\"; \
+    fi; \
   fi && \
   cd /homeassistant && \
   exec ttyd --port 7681 --writable --ping-interval 30 --max-clients 5 \

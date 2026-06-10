@@ -107,6 +107,50 @@ claude --continue
 | `auto_start_claude` | Launch Claude automatically when the terminal opens | true |
 | `claude_skip_permissions` | Run Claude with `--dangerously-skip-permissions` (no per-action prompts) | true |
 | `claude_extra_args` | Extra CLI flags appended to the auto-started Claude (e.g. `--model opus`) | "" |
+| `enable_chat_ui` | Also run the CloudCLI chat web UI on port 3001 (mobile-friendly; see below) | false |
+
+## Chat Web UI (CloudCLI) — mobile-friendly, experimental
+
+Prefer a chat window over the terminal (especially on a phone)? Enable `enable_chat_ui`
+to also run **[CloudCLI](https://github.com/siteboon/claudecodeui)** — a responsive web
+chat front-end for Claude Code. It's an alternative to the terminal TUI: a normal web
+page that scrolls natively, with no tmux and no pull-to-refresh fighting.
+
+**Enable it:** set `enable_chat_ui: true` and restart the add-on. On first start it
+installs CloudCLI into persistent storage (takes a minute), then serves it on port
+**3001**. It reuses your existing Claude login, HA file access and MCP servers — nothing
+extra to set up on the Claude side.
+
+**Open it:** `http://<your-ha-ip>:3001` (e.g. `http://homeassistant.local:3001`).
+CloudCLI has its **own login**, which you create on first visit; it persists in
+`/homeassistant/.claudecode/cloudcli`.
+
+> **Why not the HA sidebar?** CloudCLI's frontend uses absolute asset/websocket paths,
+> which don't survive HA ingress's dynamic sub-path — so it runs on a direct port rather
+> than a sidebar panel. The terminal add-on keeps its sidebar panel.
+
+**Optional sidebar shortcut** — add a "Claude Chat" entry to the HA sidebar by putting
+this in `configuration.yaml` and restarting HA:
+
+```yaml
+panel_iframe:
+  claude_chat:
+    title: "Claude Chat"
+    icon: mdi:message-processing
+    url: "http://<your-ha-ip>:3001"
+    require_admin: true
+```
+
+Caveat: the iframe only loads if your browser allows it — if you reach HA over **https**
+(e.g. Nabu Casa), it may block the **http** iframe (mixed content), and CloudCLI may
+refuse to be framed. If so, just open `http://<your-ha-ip>:3001` directly (add it to your
+phone's home screen for a one-tap app).
+
+**Notes**
+- Requires **Node 22+** (the add-on base provides it); otherwise the chat UI is skipped
+  with a warning and the terminal is unaffected.
+- Logs: `/homeassistant/.claudecode/cloudcli/cloudcli.log`.
+- Opt-in and additive — with `enable_chat_ui: false` (default) nothing changes.
 
 ## Always-Latest Claude Code
 
